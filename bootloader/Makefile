@@ -1,3 +1,4 @@
+
 # create virtual floppy disk configured using
 # FAT12 FS and place boot loader and second stage on it
 FATFloppy: Boot1.bin Boot2.bin
@@ -8,11 +9,20 @@ FATFloppy: Boot1.bin Boot2.bin
 	sudo umount /media/floppy1; \
 	dd if=Boot1.bin of=Floppy.flp conv=notrunc status=noxfer;
 
+OS: Boot1.bin Boot2.bin Kernel.bin
+	dd if=/dev/zero of=Floppy.flp bs=512 count=2879; \
+	dd if=Boot1.bin of=Floppy.flp conv=notrunc status=noxfer; \
+	dd if=Boot2.bin of=Floppy.flp conv=notrunc status=noxfer seek=1;
+	dd if=../kernel/Kernel.bin of=Floppy.flp conv=notrunc status=noxfer seek=2;
+	
 Floppy: Boot1.bin Boot2.bin
 	dd if=/dev/zero of=Floppy.flp bs=512 count=2879; \
 	dd if=Boot1.bin of=Floppy.flp conv=notrunc status=noxfer; \
 	dd if=Boot2.bin of=Floppy.flp conv=notrunc status=noxfer seek=1;
 
+Kernel.bin:
+	gcc -ffreestanding -c ../kernel/kern.c -o kern.o
+	ld -o ../kernel/Kernel.bin -Ttext 0x1000 ../kernel/kern.o --oformat binary
 # create second stage bootloader binary from assembly
 Boot2.bin:
 	nasm -f bin Boot2.asm -o Boot2.bin

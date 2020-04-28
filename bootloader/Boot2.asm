@@ -1,46 +1,49 @@
-org 0x7e00                                  ; offset to 512 bytes past stage 1 bootloader, 0x7c00
+org 0x7e00                              ; offset to 512 bytes past stage 1 bootloader, 0x7c00
 
-bits 16                                     ; still in 16 bit real mode
-
-jmp main                                    ; jump to main
+jmp main                                ; jump to main
 
 %include './util/print.asm'
+%include './util/read_sector.asm'
 %include './util/init_gdt.asm'
 ;*************************************************;
 ;	Second-stage bootloader entry point
 ;*************************************************;
+[bits 16]
 main:
-    mov si, startmsg                             ; place string at stack pointer
+
+    mov [BOOT_DRIVE], dl                ; boot drive persisted in DL by stage 1 boot loader
+
+    mov si, startmsg                    ; place string at stack pointer
     call Print
     
-    SWITCH_PMODE:
-        cli                                 ; no BIOS interrupts in pmode
-        lgdt [gdt_descriptor]               ; load global descriptor table
-        mov eax, cr0                        ; store control register in eax
-        or eax, 0x1                         ; set first bit of eax
-        mov cr0, eax                        ; move eax to control register to set first bit and enter pmode
-        jmp CODE_SEG:init_pmode             ; execute far jump to flush pipeline before entering pmode
+    call load_kernel
     
-[bits 32]
-init_pmode:
-    mov ax, DATA_SEG
-    mov ds, ax
-    mov es, ax
-    mov fs, ax
-    mov gs, ax
-    mov ss, ax
+    call switch_pmode                   ; load gdt and enable pmode
     
-    mov ebp, 0x90000                          
-    mov esp, ebp                            ; place stack pointer at top of free space
-    
-    call start_pmode
 
-%include './util/print_pmode.asm'
+BOOT_DRIVE: db 0
+KERN_SECTORS: dw 0x0f
+KERNEL_OFFSET equ 0x1000
+
+[bits 16]
+load_kernel:
+    mov bx, KERNEL_OFFSET               ; load kernel at 0x1000 in memory
+    mov dl, [BOOT_DRIVE]                ; read from boot drive
+    mov dh, 0x00                        ; read from side 0
+    mov cl, 0x03                        ; read from third sector (after second stage bootloader)
+    mov ch, 0x00                        ; read from outmost cylinder
+    mov al, [KERN_SECTORS]              ; read 15 sectors
+    call ReadSectors
+
+%include './util/pmode.asm'
 
 [bits 32]
-start_pmode:
+start_kern:
     mov ebx, pm
     call print_pmode
+
+    call KERNEL_OFFSET                  ; call kernel (C) code, loaded at specified offset
+    
     jmp $
     
 ;*************************************************;
@@ -48,4 +51,4 @@ start_pmode:
 ;*************************************************;
 
 startmsg db "ENTERING SECOND STAGE BOOTLOADER...", 0
-pm db "ENTERING 32-BIT PMODE", 0
+pm db "ENTERED 32-BIT PMODE, JUMPING TO KERNEL", 0

@@ -61,7 +61,9 @@ start: jmp main
         mov cl, 0x02                        ; read from second sector (after bootloader)
         mov ch, 0x00                        ; read from outmost cylinder
         mov al, [SSBLSIZE]                  ; read 1 sector
+        push dx                             ; dx overwritten by ReadSector, must persist boot drive
         call ReadSectors
+        pop dx                              ; pop to dx so boot drive stored in dl
     
     .EXIT:
         mov si, exit_msg
